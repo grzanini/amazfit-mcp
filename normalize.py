@@ -62,6 +62,7 @@ SPORT_NAMES: dict[int, str] = {
     42: "snowboarding",
     47: "mountain biking",
     49: "strength training",
+    52: "strength training",
     60: "yoga",
     70: "rock climbing",
     71: "ballet",
@@ -652,3 +653,37 @@ def date_range_ms(from_date: str, to_date: str) -> tuple[int, int]:
     start = datetime.combine(date.fromisoformat(from_date), datetime.min.time(), tzinfo=tz)
     end = datetime.combine(date.fromisoformat(to_date), datetime.max.time(), tzinfo=tz)
     return int(start.timestamp() * 1000), int(end.timestamp() * 1000)
+
+
+def hr_minutes(day: dict) -> dict:
+    """Per-minute heart rate for one local day from `band_detail`: 1440 slots,
+    None where the watch had no reading (0, 254, 255)."""
+    raw = day.get("hr_bytes") or b""
+    vals = [int(b) if 30 < b < 230 else None for b in raw[:1440]]
+    vals += [None] * (1440 - len(vals))
+    valid = [v for v in vals if v is not None]
+    return _clean(
+        {
+            "date": day.get("date"),
+            "coverage_min": len(valid),
+            "min_hr": min(valid) if valid else None,
+            "max_hr": max(valid) if valid else None,
+            "hr": vals,
+        }
+    )
+
+
+def hrv_night(item: dict, tz: tzinfo | None = None) -> dict:
+    """One night of per-minute RMSSD samples as ISO timestamps + ms values."""
+    tz = tz or local_tz()
+    start = _num(item.get("start_ms"), int) or 0
+    out = []
+    for smp in item.get("samples") or []:
+        hrv = _num(smp.get("hrv"), int)
+        off = _num(smp.get("s"), int)
+        if hrv is None or off is None or hrv <= 0:
+            continue
+        t = datetime.fromtimestamp((start + off) / 1000, tz)
+        out.append({"t": t.isoformat(timespec="minutes"), "rmssd": hrv})
+    first = out[0]["t"] if out else None
+    return _clean({"start": first, "n": len(out), "samples": out})

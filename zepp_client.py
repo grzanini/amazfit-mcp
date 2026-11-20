@@ -344,6 +344,58 @@ class ZeppClient:
             )
         return out
 
+    def band_detail(self, from_date: str, to_date: str) -> list[dict]:
+        """Per-day records from `band_data.json` with `query_type=detail`: the
+        decoded `summary` plus `data_hr` (1440 bytes, one heart-rate sample per
+        minute of the local day; 0/254/255 = no reading) and `data` (3 bytes per
+        minute, byte 2 = steps). Dates ISO YYYY-MM-DD."""
+        j = self._get(
+            "/v1/data/band_data.json",
+            {
+                "query_type": "detail",
+                "device_type": "android_phone",
+                "userid": self.user_id,
+                "from_date": from_date,
+                "to_date": to_date,
+            },
+        )
+        out = []
+        for day in j.get("data", []) or []:
+            raw_hr = day.get("data_hr")
+            raw_act = day.get("data")
+            out.append(
+                {
+                    "date": day.get("date_time") or day.get("date"),
+                    "summary": _maybe_b64_json(day.get("summary")) if day.get("summary") else None,
+                    "hr_bytes": base64.b64decode(raw_hr) if raw_hr else b"",
+                    "activity_bytes": base64.b64decode(raw_act) if raw_act else b"",
+                    "source": day.get("source"),
+                }
+            )
+        return out
+
+    def hrv_samples(self, from_ms: int, to_ms: int, page_size: int = 100) -> list[dict]:
+        """Overnight HRV (RMSSD) samples, one per minute, from the v2 events
+        endpoint (`eventType=HRVRMSSD`, `subType=real_data`). Each item has
+        `startTime` (ms) and `samples` [{s: offset ms, hrv: ms}]."""
+        j = self._get(
+            "/v2/users/me/events",
+            {"eventType": "HRVRMSSD", "subType": "real_data", "from": from_ms, "to": to_ms, "limit": page_size},
+        )
+        items = j.get("items") or []
+        out = []
+        for it in items:
+            v = it.get("value")
+            if isinstance(v, str):
+                try:
+                    v = json.loads(v)
+                except Exception:
+                    continue
+            if not isinstance(v, dict):
+                continue
+            out.append({"timestamp": it.get("timestamp"), "start_ms": v.get("startTime"), "samples": v.get("samples") or []})
+        return out
+
     def events(self, event_type: str, from_ms: int, to_ms: int, page_size: int = 200) -> list[dict]:
         """Health events (`PaiHealthInfo`, `all_day_stress`, `blood_oxygen`,
         `readiness`, ...) between two epoch-ms timestamps, oldest first.

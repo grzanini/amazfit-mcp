@@ -3,3 +3,10 @@ __pycache__/
 .venv/
 .DS_Store
 .mcp.json
+
+# Dados pessoais de saúde e saídas locais: ficam só no Mac
+exports/
+painel/data/
+painel/logs/
+.pytest_cache/
+*.log

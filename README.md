@@ -35,6 +35,21 @@ Dates are ISO `YYYY-MM-DD` in local time. Workout `sport` names come from Zepp's
 numeric type codes; unmapped codes show as `unknown (type N)`. Add them to
 `SPORT_NAMES` in `normalize.py`.
 
+## Additions in this fork
+
+This fork ([grzanini/amazfit-mcp](https://github.com/grzanini/amazfit-mcp)) adds, on top of
+[fjuliofontes/amazfit-mcp](https://github.com/fjuliofontes/amazfit-mcp):
+
+| Tool | Returns |
+|------|---------|
+| `get_heart_rate_minutes(from_date?, to_date?)` | All-day heart rate, one sample per minute (1440 per local day), with coverage, min and max |
+| `get_hrv_samples(from_date?, to_date?)` | Overnight HRV (RMSSD, ms), one sample per minute of sleep, per night |
+
+- Sport code 52 is mapped to strength training.
+- [`painel/`](painel/README.md): a WHOOP-style recovery / strain / sleep engine and dashboard page
+  built on these tools (documentation in Portuguese). Feedback on the formulas is welcome: open an issue.
+- `tools/transcrever.py`: local audio transcription with faster-whisper.
+
 ## Requirements
 
 - Python 3.12+

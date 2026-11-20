@@ -262,6 +262,43 @@ def get_health_metrics(
     return [{"date": d, **{name: m[d] for name, m in per_metric.items() if d in m}} for d in dates]
 
 
+@mcp.tool()
+def get_heart_rate_minutes(from_date: str | None = None, to_date: str | None = None) -> list[dict]:
+    """All-day heart rate, one sample per minute (1440 per local day), from the
+    watch's continuous monitoring. Null = no reading that minute. Also returns
+    coverage, min and max. ISO YYYY-MM-DD dates; defaults to yesterday and today.
+    Use it for TRIMP/strain, time in HR zones, or to inspect a workout window."""
+    hi = _date(to_date, date.today())
+    lo = _date(from_date, hi - timedelta(days=1))
+    days = client().band_detail(lo.isoformat(), hi.isoformat())
+    return [N.hr_minutes(d) for d in days if d.get("date")]
+
+
+@mcp.tool()
+def get_hrv_samples(from_date: str | None = None, to_date: str | None = None) -> list[dict]:
+    """Overnight HRV (RMSSD, ms) samples, one per minute during sleep, for the
+    nights ending on the given dates. ISO YYYY-MM-DD; defaults to the last 7
+    nights. The watch's nightly `overnight_hrv_ms` is the plain mean of these;
+    with sleep stages you can weight deep-sleep minutes like WHOOP does."""
+    hi = _date(to_date, date.today())
+    lo = _date(from_date, hi - timedelta(days=6))
+    # a night ending on `lo` starts the evening before
+    frm, to = N.date_range_ms((lo - timedelta(days=1)).isoformat(), hi.isoformat())
+    items = client().hrv_samples(frm, to, page_size=200)
+    tz = _calendar_tz()
+    out = []
+    for it in items:
+        night = N.hrv_night(it, tz)
+        if not night.get("samples"):
+            continue
+        end_day = datetime.fromisoformat(night["samples"][-1]["t"]).date().isoformat()
+        if lo.isoformat() <= end_day <= hi.isoformat():
+            night["date"] = end_day
+            out.append(night)
+    out.sort(key=lambda n: n["date"])
+    return out
+
+
 def _calendar_tz() -> ZoneInfo:
     """IANA zone for calendar entries. The API rejects abbreviations like
     "WEST", and a fixed offset would misplace entries across DST changes, so
